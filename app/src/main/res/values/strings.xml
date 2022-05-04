@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">1.ADMIN DKM</string>
+    <string name="not_registered_sign_up_here">Not registered? Sign Up here</string>
+    <string name="forgot_password">Forgot Password</string>
+    <string name="sign_in">Sign In</string>
+    <string name="login_admin">LOGIN ADMIN</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="already_have_an_account_sign_in_here">Already have an account? Sign in here</string>
+    <string name="sign_up">Sign Up</string>
+    <string name="register_admin">REGISTER ADMIN</string>
+</resources>

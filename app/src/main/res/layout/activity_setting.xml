@@ -1,0 +1,135 @@
+ } else if (e.mVR == OW) {
+            if (e.mLength == -1) {
+                e.mLength = mFileLen - mMappedByteBuffer.position();
+            }
+            short[] s = new short[(int) (e.mLength / 2)];
+            mMappedByteBuffer.asShortBuffer().get(s);
+            e.mValue = s;
+        }
+
+    }
+
+    private void setOrder(ByteOrder order) {
+        mByteOrder = order;
+        mMappedByteBuffer.order(mByteOrder);
+    }
+
+    public static Volume buildVolume(String dirName) {
+        return buildVolume(new File(dirName));
+    }
+
+    public static Volume buildVolume(File dir) {
+        LoaderDicom d = new LoaderDicom();
+        int[] tags = new int[]{
+                tagInt(0x20, 0x32),
+                tagInt(0x20, 0x37),
+                tagInt(0x28, 0x10),
+                tagInt(0x28, 0x11),
+                tagInt(0x7fe0, 0x10)
+        };
+
+        File[] files = dir.listFiles();
+        Arrays.sort(files, new Comparator<File>() {
+
+            @Override
+            public int compare(File o1, File o2) {
+
+                return o1.getName().compareTo(o2.getName());
+            }
+        });
+        Volume v = new Volume();
+        int count = 0;
+        for (File file : files) {
+            if (file.isDirectory()) {
+                continue;
+            }
+            if (file.getName().equals(".DS_Store")) {
+                continue;
+            }
+            count++;
+        }
+        if (count < MIN_VOLUME_SIZE) {
+            return null;
+        }
+        v.mData = new short[count][];
+        v.mDimz = count;
+        count = 0;
+        for (File file : files) {
+            if (file.isDirectory()) {
+                continue;
+            }
+            if (file.getName().equals(".DS_Store")) {
+                continue;
+            }
+            try {
+                TagSet data = d.read(file, tags);
+                v.mData[count] = (short[]) data.get(0x7fe0, 0x10).mValue;
+                count++;
+                v.mDimx = (Short) data.get(0x28, 0x10).mValue;
+                v.mDimy = (Short) data.get(0x28, 0x11).mValue;
+            } catch (Exception e) {
+                Log.e(LOGTAG, "Failed to parse " + file.getPath());
+                e.printStackTrace();
+            }
+        }
+        return v;
+    }
+
+    /**
+     * This is a multi threaded volume loaded
+     * It creates 2xthe number of cores
+     * @param rs The renderscript context
+     * @param dir The directory containing the DICOM files
+     * @param listener The Listener to provide feedback to the UI on loading
+     * @return The Volume object loaded with the volume
+     */
+    public static Volume buildRSVolume(final RenderScript rs, File dir,
+                                       final VolumeLoader.ProgressListener listener) {
+        final int[] tags = new int[]{
+                tagInt(0x20, 0x32),
+                tagInt(0x20, 0x37),
+                tagInt(0x28, 0x10),
+                tagInt(0x28, 0x11),
+                tagInt(0x28, 0x30),
+                tagInt(0x7fe0, 0x10)
+        };
+
+        File[] files = dir.listFiles();
+        Arrays.sort(files, new Comparator<File>() {
+
+            @Override
+            public int compare(File o1, File o2) {
+
+                return o1.getName().compareTo(o2.getName());
+            }
+        });
+        final Volume v = new Volume();
+        int count = 0;
+
+
+        final Vector<File> toRun = new Vector<File>();
+        final HashMap<File, Integer> fileMap = new HashMap<File, Integer>();
+        for (File file : files) {
+            if (file.isDirectory()) {
+                continue;
+            }
+            if (file.getName().equals(".DS_Store")) {
+                continue;
+            }
+            toRun.add(file);
+            fileMap.put(file, count);
+            count++;
+        }
+        if (count < MIN_VOLUME_SIZE) {
+            return null;
+        }
+        v.mDimz = count;
+        if (listener != null) {
+            listener.progress(0, v.mDimx);
+        }
+        v.mVolumeAllocation = null;
+        final String []pixel_spacing = new String[count];
+        final String []slice_pos = new String[count];
+
+        final ScriptC_bricked scriptC_bricked = new ScriptC_bricked(rs);
+        int number_of_threads = 2 * Runtime.getRuntime().availableProc
